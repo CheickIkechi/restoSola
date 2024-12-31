@@ -15,7 +15,7 @@ const ProductList = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/products');
+        const response = await axios.get('https://restosola.onrender.com/products');
         setProducts(response.data);
         setFilteredProducts(response.data); // Initialisation du tableau avec tous les produits
       } catch (error) {
@@ -88,7 +88,7 @@ const ProductList = () => {
 const submitOrder = async () => {
   try {
     const orderData = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
-    await axios.post('http://localhost:3000/orders', { product_data: orderData, note });
+    await axios.post('https://restosola.onrender.com/orders', { product_data: orderData, note });
     alert('Commande validée avec succès!');
     
     // Vider le panier et mettre à jour localStorage
@@ -156,7 +156,7 @@ const submitOrder = async () => {
           >
             <div className="flex justify-center mb-3">
               <img
-                src={`http://localhost:3000${product.image}`}
+                src={`https://restosola.onrender.com${product.image}`}
                 alt={product.name}
                 className="w-40 h-40 object-cover rounded-lg"
               />

@@ -19,7 +19,7 @@ const ProductForm = () => {
 
     const fetchProducts = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/products');
+        const response = await axios.get('https://restosola.onrender.com/products');
         setProducts(response.data);
       } catch (err) {
         setError('Erreur lors de la récupération des produits.');
@@ -41,14 +41,14 @@ const ProductForm = () => {
     formData.append('image', image);
 
     try {
-      await axios.post('http://localhost:3000/products', formData);
+      await axios.post('https://restosola.onrender.com/products', formData);
       alert('Produit ajouté avec succès!');
       setName('');
       setCategory('');
       setPrice('');
       setImage(null);
       // Mettre à jour la liste des produits
-      const response = await axios.get('http://localhost:3000/products');
+      const response = await axios.get('https://restosola.onrender.com/products');
       setProducts(response.data);
     } catch (error) {
       console.error(error);
@@ -60,7 +60,7 @@ const ProductForm = () => {
     if (window.confirm('Voulez-vous vraiment supprimer ce produit ?')) {
       console.log(`Tentative de suppression du produit avec ID : ${productId}`);
       try {
-        const response = await axios.delete(`http://localhost:3000/products/${productId}`);
+        const response = await axios.delete(`https://restosola.onrender.com/products/${productId}`);
         console.log('Réponse du serveur :', response.data);
         alert('Produit supprimé avec succès!');
         // Mettre à jour la liste des produits

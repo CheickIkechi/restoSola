@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { FaShoppingCart, FaCheck, FaMinus, FaPlus,FaCoffee,FaDrumstickBite,FaIceCream,FaBreadSlice } from 'react-icons/fa';
+import { FaShoppingCart, FaCheck, FaMinus, FaPlus, FaCoffee, FaDrumstickBite, FaIceCream, FaBreadSlice } from 'react-icons/fa';
+import { connectToQZTray, configurePrinter, printWithQZTray } from '../qz-helper.js';
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -11,35 +12,32 @@ const ProductList = () => {
   const [note, setNote] = useState('');
   const cartRef = useRef(null);
 
-  // Récupération des produits depuis l'API
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await axios.get('https://restosola.onrender.com/products');
         setProducts(response.data);
-        setFilteredProducts(response.data); // Initialisation du tableau avec tous les produits
+        setFilteredProducts(response.data);
       } catch (error) {
         console.error('Erreur lors du chargement des produits :', error);
       }
     };
 
     fetchProducts();
+    connectToQZTray(); // Connexion à QZ Tray au démarrage
   }, []);
 
-  // Filtrage des produits par catégorie
   const filterProducts = (category) => {
     setSelectedCategory(category);
-
     if (category === 'Tous') {
-      setFilteredProducts(products); // Affiche tous les produits lorsque "Tous" est sélectionné
+      setFilteredProducts(products);
     } else if (category) {
-      setFilteredProducts(products.filter((product) => product.category === category)); // Filtre par catégorie
+      setFilteredProducts(products.filter((product) => product.category === category));
     } else {
-      setFilteredProducts(products); // Affiche tous les produits si la catégorie est vide
+      setFilteredProducts(products);
     }
   };
 
-  // Ajouter un produit au panier
   const addToCart = useCallback((product) => {
     setCart((prevCart) => {
       const existingProductIndex = prevCart.findIndex((item) => item.id === product.id);
@@ -58,7 +56,6 @@ const ProductList = () => {
     });
   }, []);
 
-  // Récupérer le panier depuis localStorage au chargement
   useEffect(() => {
     const storedCart = localStorage.getItem('cart');
     if (storedCart) {
@@ -66,7 +63,6 @@ const ProductList = () => {
     }
   }, []);
 
-  // Retirer un produit du panier
   const removeFromCart = (productId) => {
     setCart((prevCart) => {
       const updatedCart = prevCart
@@ -78,30 +74,63 @@ const ProductList = () => {
     });
   };
 
-  // Calcul du total du panier
   const calculateTotal = () => {
     return cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
   };
 
-  // Soumettre la commande
-// Soumettre la commande
-const submitOrder = async () => {
-  try {
-    const orderData = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
-    await axios.post('https://restosola.onrender.com/orders', { product_data: orderData, note });
-    alert('Commande validée avec succès!');
-    
-    // Vider le panier et mettre à jour localStorage
-    setCart([]);
-    localStorage.removeItem('cart'); // Supprimer le panier de localStorage
-    setIsCartOpen(false);
-    setNote('');
-  } catch (error) {
-    console.error('Erreur lors de la validation de la commande :', error);
-    alert('Erreur lors de la validation de la commande.');
-  }
-};
-  // Fermeture du panier si on clique à l'extérieur
+  const printReceipt = async (orderDetails) => {
+    const { items, total } = orderDetails;
+  
+    const receiptContent = [
+      { type: 'raw', format: 'plain', data: `\nSolaResto\n` },
+      { type: 'raw', format: 'plain', data: `${new Date().toLocaleString()}\n\n` },
+      { type: 'raw', format: 'plain', data: `Produits :\n` },
+      ...items.map(
+        (item) => ({
+          type: 'raw',
+          format: 'plain',
+          data: `${item.name} - ${item.quantity} x ${item.price}€\n`,
+        })
+      ),
+      { type: 'raw', format: 'plain', data: `\nTotal : ${total}€\n` },
+      { type: 'raw', format: 'plain', data: `Merci pour votre commande !\n` },
+    ];
+  
+    try {
+      // Configurez l'imprimante ici
+      const printerName = "NomDeVotreImprimante"; // Remplacez par le nom de votre imprimante
+      const config = configurePrinter(printerName);
+  
+      // Imprimez avec la configuration
+      await printWithQZTray(config, receiptContent);
+      alert('Reçu imprimé avec succès !');
+    } catch (error) {
+      console.error("Erreur lors de l'impression du reçu :", error);
+      alert("Erreur lors de l'impression du reçu.");
+    }
+  };
+
+  const submitOrder = async () => {
+    try {
+      const orderData = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+      await axios.post('https://restosola.onrender.com/orders', { product_data: orderData, note });
+      alert('Commande validée avec succès!');
+
+      await printReceipt({
+        items: cart,
+        total: calculateTotal(),
+      });
+
+      setCart([]);
+      localStorage.removeItem('cart');
+      setIsCartOpen(false);
+      setNote('');
+    } catch (error) {
+      console.error('Erreur lors de la validation de la commande :', error);
+      alert('Erreur lors de la validation de la commande.');
+    }
+  };
+
   const handleOutsideClick = (event) => {
     if (cartRef.current && !cartRef.current.contains(event.target)) {
       setIsCartOpen(false);

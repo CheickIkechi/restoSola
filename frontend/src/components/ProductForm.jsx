@@ -76,7 +76,7 @@ const ProductForm = () => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">Ajouter un Produit</h2>
+      <h2 className="text-2xl text-center font-bold mb-4">Ajouter un Produit</h2>
       <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 shadow rounded">
         <div>
           <label className="block font-bold">Nom du Produit</label>

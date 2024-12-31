@@ -2,16 +2,17 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
-"scripts": {
-  "start": "node index.js",
-  "build": "npm install"
-},
-
+  "scripts": {
+    "start": "node index.js",
+    "build": "npm install"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.7.9",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "fs": "^0.0.1-security",

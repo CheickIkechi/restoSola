@@ -4,6 +4,9 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const axios = require('axios');
+const bcrypt = require('bcrypt'); // Pour le hachage des mots de passe
+
 
 const app = express();
 const PORT = process.env.PORT || 3000; // Utilisation du port d'environnement de Render ou 3000 par défaut
@@ -12,13 +15,6 @@ const PORT = process.env.PORT || 3000; // Utilisation du port d'environnement de
 app.use(cors());  // Permet à n'importe quelle origine de faire des requêtes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Définir le chemin d'accès aux fichiers (pour Render)
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR);
-}
-app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Database setup (utilisation de Render persistant pour SQLite)
 const db = new sqlite3.Database(path.join(__dirname, 'sola_resto.db'), (err) => {
@@ -50,46 +46,87 @@ const createTables = () => {
       note TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL
+    )`);
   });
 };
 createTables();
 
-// File upload setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR); // Utilisation du répertoire uploads
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage });
+// GitHub API configuration
+const GITHUB_TOKEN = 'SHA256:w0+ixWQUMGeuK0Gd8iJPx3yTKYleJZLpuHP6GKRAm/M'; // Remplacez par votre token d'accès personnel
+const GITHUB_REPO = 'CheickIkechi/restoSola'; // Remplacez par votre nom d'utilisateur et le nom de votre dépôt
 
-// Categories list (static for simplicity)
-const categories = ['Boissons', 'Nourriture', 'Desserts', 'Collations'];
+// Function to upload image to GitHub
+const uploadImageToGitHub = async (file) => {
+  const filePath = `uploads/${file.filename}`;
+  const content = fs.readFileSync(file.path);
+  const base64Content = content.toString('base64');
 
-// Routes
-
-// Add a product
-app.post('/products', upload.single('image'), (req, res) => {
-  const { name, category, price } = req.body;
-  const image = req.file ? `/uploads/${req.file.filename}` : null;
-
-  if (!categories.includes(category)) {
-    return res.status(400).json({ error: 'Invalid category.' });
-  }
-
-  db.run(
-    `INSERT INTO products (name, category, price, image) VALUES (?, ?, ?, ?)`,
-    [name, category, parseFloat(price), image],
-    function (err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.status(201).json({ id: this.lastID });
-      }
+  const response = await axios.put(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
+    {
+      message: `Upload ${file.filename}`,
+      content: base64Content,
+    },
+    {
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
     }
   );
+
+  return response.data.content.download_url; // URL de l'image téléchargée
+};
+
+// Route pour la connexion d'un utilisateur
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (!row) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+    const match = await bcrypt.compare(password, row.password); // Vérification du mot de passe
+    if (match) {
+      res.status(200).json({ message: 'Login successful', userId: row.id });
+    } else {
+      res.status(401).json({ error: 'Invalid username or password.' });
+    }
+  });
+});
+
+// Add a product
+app.post('/products', multer().single('image'), async (req, res) => {
+  const { name, category, price } = req.body;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No image uploaded.' });
+  }
+
+  try {
+    const imageUrl = await uploadImageToGitHub(req.file);
+    db.run(
+      `INSERT INTO products (name, category, price, image) VALUES (?, ?, ?, ?)`,
+      [name, category, parseFloat(price), imageUrl],
+      function (err) {
+        if (err) {
+          res.status(500).json({ error: err.message });
+        } else {
+          res.status(201).json({ id: this.lastID });
+        }
+      }
+    );
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to upload image to GitHub.' });
+  }
 });
 
 // Get all products
@@ -179,9 +216,6 @@ app.delete('/products/:id', (req, res) => {
       return res.status(404).json({ error: 'Produit non trouvé.' });
     }
 
-    const imagePath = path.join(__dirname, row.image.startsWith('/') ? row.image.slice(1) : row.image);
-    console.log('Chemin de l\'image à supprimer :', imagePath);
-
     db.get('SELECT * FROM orders WHERE product_data LIKE ?', [`%${id}%`], (err, orderRow) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -205,31 +239,11 @@ app.delete('/products/:id', (req, res) => {
             return res.status(404).json({ error: 'Produit non trouvé.' });
           }
 
-          if (fs.existsSync(imagePath)) {
-            fs.unlink(imagePath, (err) => {
-              if (err) {
-                console.error('Erreur lors de la suppression de l\'image :', err.message);
-              } else {
-                console.log('Image supprimée avec succès.');
-              }
-            });
-          } else {
-            console.warn('Fichier image introuvable :', imagePath);
-          }
-
           res.status(200).json({ message: 'Produit supprimé avec succès.' });
         });
       }
     });
   });
-});
-
-// Upload an image separately
-app.post('/upload', upload.single('image'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded.' });
-  }
-  res.json({ filePath: `/uploads/${req.file.filename}` });
 });
 
 // Start server

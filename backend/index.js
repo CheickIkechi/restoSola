@@ -61,25 +61,30 @@ const GITHUB_REPO = 'CheickIkechi/restoSola'; // Remplacez par votre nom d'utili
 
 // Function to upload image to GitHub
 const uploadImageToGitHub = async (file) => {
-  const filePath = `uploads/${file.filename}`;
-  const content = fs.readFileSync(file.path);
-  const base64Content = content.toString('base64');
+  const filePath = `uploads/${file.filename}`; // Chemin où l'image sera stockée dans le dépôt
+  const content = fs.readFileSync(file.path); // Lire le fichier image
+  const base64Content = content.toString('base64'); // Encoder le contenu en base64
 
-  const response = await axios.put(
-    `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
-    {
-      message: `Upload ${file.filename}`,
-      content: base64Content,
-    },
-    {
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        'Content-Type': 'application/json',
+  try {
+    const response = await axios.put(
+      `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
+      {
+        message: `Upload ${file.filename}`, // Message de commit
+        content: base64Content, // Contenu de l'image encodé en base64
       },
-    }
-  );
+      {
+        headers: {
+          Authorization: `token ${GITHUB_TOKEN}`, // Votre token d'accès personnel
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-  return response.data.content.download_url; // URL de l'image téléchargée
+    return response.data.content.download_url; // URL de l'image téléchargée
+  } catch (error) {
+    console.error("Erreur lors de l'upload de l'image :", error.response.data);
+    throw new Error('Failed to upload image to GitHub.');
+  }
 };
 
 // Route pour la connexion d'un utilisateur

@@ -89,17 +89,47 @@ const uploadImageToGitHub = async (file) => {
   }
 };
 
+
+const deleteImageFromGitHub = async (filePath) => {
+  try {
+    const githubApiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
+    const response = await axios.get(githubApiUrl, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
+    });
+
+    const sha = response.data.sha; // SHA de l'image sur GitHub
+
+    await axios.delete(githubApiUrl, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
+      data: {
+        message: `Delete ${filePath}`,
+        sha,
+      },
+    });
+
+    console.log(`Image supprimée avec succès de GitHub : ${filePath}`);
+  } catch (error) {
+    console.error(`Erreur lors de la suppression de l'image sur GitHub :`, error.response?.data || error.message);
+    throw new Error('Failed to delete image from GitHub.');
+  }
+};
+
+
 // Configuration de Multer pour stocker les fichiers dans le dossier 'uploads'
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads'); // Dossier où les fichiers seront stockés
+    const uploadPath = path.join(__dirname, 'uploads'); // Assurez-vous que le dossier backend/uploads existe
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true }); // Crée le dossier s'il n'existe pas
+    }
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname); // Utiliser le nom original du fichier
+    cb(null, file.originalname);
   },
 });
-
 const upload = multer({ storage: storage });
+
 
 
 // Route pour la connexion d'un utilisateur
@@ -225,47 +255,59 @@ app.get('/orders', (req, res) => {
 // Delete a product
 app.delete('/products/:id', (req, res) => {
   const { id } = req.params;
-  console.log(`Demande de suppression du produit avec l'ID : ${id}`);
 
-  db.get('SELECT image FROM products WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT image FROM products WHERE id = ?', [id], async (err, row) => {
     if (err) {
       console.error('Erreur lors de la récupération du produit :', err.message);
       return res.status(500).json({ error: err.message });
     }
     if (!row) {
-      console.warn('Produit introuvable dans la base de données.');
       return res.status(404).json({ error: 'Produit non trouvé.' });
     }
 
-    db.get('SELECT * FROM orders WHERE product_data LIKE ?', [`%${id}%`], (err, orderRow) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+    const imageUrl = row.image; // URL de l'image
+    const filePath = `uploads/${path.basename(imageUrl)}`; // Déduire le chemin du fichier sur GitHub
 
-      if (orderRow) {
-        db.run('UPDATE products SET is_deleted = 1 WHERE id = ?', [id], (err) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
-          res.status(200).json({ message: 'Produit supprimé avec succès.' });
-        });
-      } else {
-        db.run('DELETE FROM products WHERE id = ?', [id], function (err) {
-          if (err) {
-            console.error('Erreur lors de la suppression du produit dans la base de données :', err.message);
-            return res.status(500).json({ error: err.message });
-          }
-          if (this.changes === 0) {
-            console.warn('Produit non trouvé dans la base de données lors de la suppression.');
-            return res.status(404).json({ error: 'Produit non trouvé.' });
-          }
+    try {
+      // Vérifiez si le produit est utilisé dans des commandes
+      db.get('SELECT * FROM orders WHERE product_data LIKE ?', [`%${id}%`], async (err, orderRow) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
 
-          res.status(200).json({ message: 'Produit supprimé avec succès.' });
-        });
-      }
-    });
+        if (orderRow) {
+          // Si utilisé dans une commande, marquez comme supprimé
+          db.run('UPDATE products SET is_deleted = 1 WHERE id = ?', [id], (err) => {
+            if (err) {
+              return res.status(500).json({ error: err.message });
+            }
+            res.status(200).json({ message: 'Produit marqué comme supprimé.' });
+          });
+        } else {
+          // Sinon, supprimez complètement le produit
+          db.run('DELETE FROM products WHERE id = ?', [id], async function (err) {
+            if (err) {
+              return res.status(500).json({ error: err.message });
+            }
+
+            try {
+              // Supprimez l'image de GitHub
+              await deleteImageFromGitHub(filePath);
+              res.status(200).json({ message: 'Produit et image supprimés avec succès.' });
+            } catch (error) {
+              console.error('Erreur lors de la suppression de l\'image :', error.message);
+              res.status(500).json({ error: 'Produit supprimé, mais échec de la suppression de l\'image.' });
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Erreur lors de la suppression de l\'image :', error.message);
+      res.status(500).json({ error: 'Failed to delete image from GitHub.' });
+    }
   });
 });
+
 
 // Start server
 app.listen(PORT, () => {

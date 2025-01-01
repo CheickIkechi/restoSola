@@ -87,6 +87,19 @@ const uploadImageToGitHub = async (file) => {
   }
 };
 
+// Configuration de Multer pour stocker les fichiers dans le dossier 'uploads'
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads'); // Dossier où les fichiers seront stockés
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname); // Utiliser le nom original du fichier
+  },
+});
+
+const upload = multer({ storage: storage });
+
+
 // Route pour la connexion d'un utilisateur
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -109,7 +122,7 @@ app.post('/login', (req, res) => {
 });
 
 // Add a product
-app.post('/products', multer().single('image'), async (req, res) => {
+app.post('/products', upload.single('image'), async (req, res) => {
   const { name, category, price } = req.body;
 
   if (!req.file) {
@@ -130,6 +143,7 @@ app.post('/products', multer().single('image'), async (req, res) => {
       }
     );
   } catch (error) {
+    console.error("Erreur lors de l'upload de l'image :", error);
     res.status(500).json({ error: 'Failed to upload image to GitHub.' });
   }
 });

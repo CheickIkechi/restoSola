@@ -19,7 +19,7 @@ const OrderListByDate = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get('https://restosola.onrender.com/orders');
+        const response = await axios.get('http://localhost:3000/orders');
         setOrders(response.data || []);
       } catch (err) {
         setError('Une erreur est survenue lors de la récupération des commandes.');

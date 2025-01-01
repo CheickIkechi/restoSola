@@ -185,7 +185,7 @@ const ProductList = () => {
           >
             <div className="flex justify-center mb-3">
               <img
-                src={`https://restosola.onrender.com${product.image}`}
+                src={`${product.image}`}
                 alt={product.name}
                 className="w-40 h-40 object-cover rounded-lg"
               />

@@ -6,6 +6,8 @@ const multer = require('multer');
 const fs = require('fs');
 const axios = require('axios');
 const bcrypt = require('bcrypt'); // Pour le hachage des mots de passe
+require('dotenv').config();
+
 
 
 const app = express();
@@ -56,7 +58,7 @@ const createTables = () => {
 createTables();
 
 // GitHub API configuration
-const GITHUB_TOKEN = 'SHA256:w0+ixWQUMGeuK0Gd8iJPx3yTKYleJZLpuHP6GKRAm/M'; // Remplacez par votre token d'accès personnel
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // Récupère le token depuis les variables d'environnement
 const GITHUB_REPO = 'CheickIkechi/restoSola'; // Remplacez par votre nom d'utilisateur et le nom de votre dépôt
 
 // Function to upload image to GitHub
@@ -74,7 +76,7 @@ const uploadImageToGitHub = async (file) => {
       },
       {
         headers: {
-          Authorization: `token ${GITHUB_TOKEN}`, // Votre token d'accès personnel
+          Authorization: `Bearer ${GITHUB_TOKEN}`, // Utilisation du format Bearer
           'Content-Type': 'application/json',
         },
       }
